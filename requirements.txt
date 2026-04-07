@@ -1,0 +1,39 @@
+# ============================================================
+# Project 1a: Crypto Risk Engine — Series 1 Foundation Service
+# requirements.txt
+# ============================================================
+
+# Web Framework (single service — FastAPI only)
+FastAPI==0.135.1
+uvicorn==0.28.1
+
+# HTTP & Networking
+requests==2.31.0
+httpx==0.28.1
+
+# Data Processing
+pandas==2.2.3
+numpy==1.26.4
+
+# Machine Learning
+scikit-learn==1.5.0
+torch==2.2.1
+joblib==1.5.3
+
+# Database
+# SQLite is built-in
+
+# Task Scheduling
+APScheduler==3.11.2
+
+# Template rendering
+Jinja2==3.1.4
+
+# Validation
+pydantic==2.12.5
+
+# Development & Testing
+pytest==7.4.3
+pytest-cov==4.1.0
+black==23.12.1
+flake8==6.1.0

@@ -1,0 +1,7 @@
+# 1. Activate the venv
+c:\Users\vidit\Desktop\1a\1a\Scripts\activate.bat
+
+# 2. Start the server
+uvicorn api_backend:app --host 0.0.0.0 --port 8000 --reload
+
+locally http://localhost:8000/

@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Crypto Risk Intelligence</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <link rel="stylesheet" href="/static/css/styles.css?v=3"/>
+</head>
+<body>
+
+<!-- SEEDING OVERLAY -->
+<div id="seeding-overlay" class="overlay hidden">
+    <div class="overlay-box">
+        <div class="spinner"></div>
+        <h2>Initialising System</h2>
+        <p>Seeding 365 days of historical BTC data from Binance.<br/>This only happens once and takes about 30 to 60 seconds.</p>
+    </div>
+</div>
+
+<!-- HEADER -->
+<header class="header">
+    <div class="header-left">
+        <span class="logo">Crypto Risk Intelligence</span>
+        <span class="coin-badge" id="coin-badge">Bitcoin / USD</span>
+        <div class="coin-switcher">
+            <button class="coin-btn active" id="coin-btn-btc" onclick="switchCoin('BTC', this)">BTC</button>
+            <button class="coin-btn" id="coin-btn-eth" onclick="switchCoin('ETH', this)">ETH</button>
+        </div>
+    </div>
+    <div class="header-center">
+        <div class="control-group">
+            <label for="refresh-rate">Refresh Rate:</label>
+            <select id="refresh-rate" onchange="updateRefreshRate(this.value)">
+                <option value="5">5s</option>
+                <option value="10" selected>10s</option>
+                <option value="15">15s</option>
+                <option value="30">30s</option>
+                <option value="60">1m</option>
+            </select>
+        </div>
+    </div>
+    <div class="header-right">
+        <button class="theme-toggle" id="theme-toggle" onclick="toggleDarkMode()" title="Toggle Dark Mode">&#9790;</button>
+        <div class="market-stats">
+            <div class="market-stat">
+                <span class="market-stat-label">24h High</span>
+                <span class="market-stat-value" id="stat-high">--</span>
+            </div>
+            <div class="market-stat">
+                <span class="market-stat-label">24h Low</span>
+                <span class="market-stat-value" id="stat-low">--</span>
+            </div>
+            <div class="market-stat">
+                <span class="market-stat-label">24h Volume</span>
+                <span class="market-stat-value" id="stat-vol">--</span>
+            </div>
+        </div>
+        <div class="price-block">
+            <span class="price-label">BTC/USD</span>
+            <span id="live-price" class="live-price">--</span>
+            <span id="price-change" class="price-change">--</span>
+            <button class="refresh-price-btn" onclick="refreshBTCPrice(event)" title="Manually refresh BTC price (bypass cache)">R</button>
+        </div>
+        <div id="risk-badge" class="risk-badge risk-low">-- Low</div>
+        <div id="api-status" class="api-status status-live">
+            <span class="status-dot"></span>
+            <span id="status-text">Live</span>
+            <span id="last-updated" style="font-size:10px;opacity:0.5;margin-left:4px"></span>
+        </div>
+    </div>
+</header>
+
+<!-- ANOMALY BANNER -->
+<div id="anomaly-banner" class="anomaly-banner hidden">
+    <span id="anomaly-banner-text"></span>
+    <button onclick="dismissBanner()">Dismiss</button>
+</div>
+
+<!-- TABS -->
+<nav class="tab-nav">
+    <button class="tab-btn active" onclick="switchTab('chart', this)">Chart</button>
+    <button class="tab-btn" onclick="switchTab('trading-signal', this)">Decision Layer</button>
+    <button class="tab-btn" onclick="switchTab('performance', this)">Performance</button>
+    <button class="tab-btn" onclick="switchTab('anomalies', this)">
+        Anomaly Log
+        <span id="anomaly-count-badge" class="count-badge hidden">0</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('model-stats', this)">Model Intelligence</button>
+    <button class="tab-btn" onclick="switchTab('explanations', this)">Learn</button>
+</nav>
+
+<!-- TAB: CHART -->
+<section id="tab-chart" class="tab-content active">
+
+    <div class="intel-top-row">
+        <div class="insight-panel">
+            <h3>Market Insight</h3>
+            <p id="risk-insight-headline">Risk insight loading...</p>
+            <p id="risk-insight-detail" class="insight-detail">Waiting for first live score update.</p>
+        </div>
+        <div class="system-flow-panel">
+            <h3>System Flow</h3>
+            <div class="flow-steps">
+                <span>Data</span>
+                <span>Feature Engineering</span>
+                <span>Models</span>
+                <span>Ensemble</span>
+                <span>Risk Score</span>
+                <span>Decision Layer</span>
+                <span>Alerts</span>
+            </div>
+        </div>
+    </div>
+
+    <details class="advanced-chart-controls">
+        <summary>Advanced Chart Controls</summary>
+        <div class="chart-controls">
+        <div class="range-buttons">
+            <button class="range-btn active" onclick="setRange('1H', this)">1H</button>
+            <button class="range-btn" onclick="setRange('1D', this)">1D</button>
+            <button class="range-btn" onclick="setRange('1W', this)">1W</button>
+            <button class="range-btn" onclick="setRange('1M', this)">1M</button>
+            <button class="range-btn" onclick="setRange('All', this)">All</button>
+        </div>
+        <div class="chart-type-buttons">
+            <button class="chart-type-btn active" onclick="setChartType('candlestick', this)" title="Candlestick chart">Candles</button>
+            <button class="chart-type-btn" onclick="setChartType('line', this)" title="Line chart">Line</button>
+        </div>
+        <div class="overlay-toggles">
+            <label><input type="checkbox" id="toggle-ma" onchange="toggleOverlay('ma')" checked/> MA (20)</label>
+            <label><input type="checkbox" id="toggle-bb" onchange="toggleOverlay('bb')" checked/> Bollinger Bands</label>
+            <label><input type="checkbox" id="toggle-anomalies" onchange="toggleOverlay('anomalies')" checked/> Anomaly Markers</label>
+            <label><input type="checkbox" id="toggle-signals" onchange="toggleOverlay('signals')" checked/> Decision Layer Signals</label>
+            <label><input type="checkbox" id="toggle-volume" onchange="toggleOverlay('volume')" checked/> Volume</label>
+            <label><input type="checkbox" id="toggle-forecast" onchange="toggleOverlay('forecast')"/> LSTM Forecast</label>
+        </div>
+        </div>
+    </details>
+
+    <!-- Risk gauge bar -->
+    <div class="risk-gauge-wrap">
+        <span class="risk-gauge-label">RISK SCORE</span>
+        <div class="risk-gauge-track">
+            <div class="risk-gauge-fill" id="risk-gauge-fill" style="width:0%;background:var(--green)"></div>
+        </div>
+        <div class="risk-gauge-zones">
+            <span class="gauge-zone" style="color:var(--green)">LOW 0-30</span>
+            <span class="gauge-zone" style="color:var(--yellow)">MED 31-60</span>
+            <span class="gauge-zone" style="color:var(--red)">HIGH 61-80</span>
+            <span class="gauge-zone" style="color:var(--critical)">CRIT 81-100</span>
+        </div>
+        <span class="risk-gauge-score" id="risk-gauge-score" style="color:var(--green)">0 / 100</span>
+    </div>
+
+    <div id="price-chart" class="chart-container"></div>
+
+</section>
+
+<!-- TAB: ANOMALIES -->
+<section id="tab-anomalies" class="tab-content hidden">
+    <div class="table-header">
+        <h2>Anomaly Log</h2>
+        <span class="table-subtitle">Real High/Critical signals only. These drive chart overlays, alerts, and Decision Layer output.</span>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+            <button class="range-btn" id="signal-filter-btn" onclick="toggleSignalFilter(this)" style="font-size:11px;padding:4px 12px">Show All Signals</button>
+            <button class="range-btn" onclick="clearAnomalyLogs()" style="font-size:11px;padding:4px 12px;color:#ef4444;border-color:#ef4444" title="Permanently delete all logged anomalies and continuity signals">Clear Logs</button>
+        </div>
+    </div>
+    <table class="anomaly-table">
+        <thead>
+            <tr>
+                <th style="width:30px"></th>
+                <th>Timestamp</th>
+                <th>Price</th>
+                <th>Risk Score</th>
+                <th>Level</th>
+                <th>IF Score</th>
+                <th>Z-Score</th>
+                <th>LSTM Score</th>
+                <th>Confidence</th>
+                <th>Strength</th>
+            </tr>
+        </thead>
+        <tbody id="anomaly-table-body"></tbody>
+    </table>
+    <div class="pagination" id="pagination-controls"></div>
+
+    <div class="table-header" style="margin-top:22px">
+        <h2>System Continuity Signals</h2>
+        <span class="table-subtitle">Synthetic low-confidence continuity markers for observability only. Not used in chart signals, alerts, or performance metrics.</span>
+    </div>
+    <table class="anomaly-table">
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Risk Score</th>
+                <th>Level</th>
+                <th>Type</th>
+                <th>Confidence</th>
+            </tr>
+        </thead>
+        <tbody id="continuity-table-body"></tbody>
+    </table>
+</section>
+
+<!-- TAB: MODEL STATS -->
+<section id="tab-model-stats" class="tab-content hidden">
+    <div class="table-header">
+        <h2>Model Intelligence</h2>
+        <span class="table-subtitle">Model artifacts, retrain metadata, and system operations timeline.</span>
+    </div>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>Last Retrain</h3>
+            <p id="stat-last-retrain">--</p>
+        </div>
+        <div class="stat-card">
+            <h3>Training Data Size</h3>
+            <p id="stat-training-size">--</p>
+        </div>
+        <div class="stat-card">
+            <h3>Real Signals Logged</h3>
+            <p id="stat-total-anomalies">--</p>
+        </div>
+        <div class="stat-card">
+            <h3>IF Anomaly Rate</h3>
+            <p id="stat-if-rate">--</p>
+        </div>
+    </div>
+
+    <p class="section-title">Saved Model Files</p>
+    <table class="model-table">
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>File</th>
+                <th>Trained At</th>
+                <th>Training Rows</th>
+                <th>Anomaly Rate</th>
+            </tr>
+        </thead>
+        <tbody id="model-registry-body"></tbody>
+    </table>
+
+    <p class="section-title">System Events</p>
+    <table class="events-table">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Type</th>
+                <th>Message</th>
+            </tr>
+        </thead>
+        <tbody id="events-body"></tbody>
+    </table>
+</section>
+
+<!-- TAB: TRADING SIGNAL -->
+<section id="tab-trading-signal" class="tab-content hidden">
+    <div class="strategy-selector">
+        <h3>Decision Layer Strategy</h3>
+        <p class="strategy-subtitle">Select a trading profile to get signals tailored to your risk tolerance</p>
+        
+        <div class="strategy-buttons" id="strategy-buttons">
+            <!-- Buttons generated by JavaScript from API -->
+        </div>
+        
+        <div class="strategy-info-card" id="strategy-info">
+            <p class="strategy-info-text">Loading strategies...</p>
+        </div>
+    </div>
+
+    <div class="signal-container">
+        <div class="signal-card" id="signal-card">
+            <div class="signal-emoji" id="signal-emoji">--</div>
+            <h2 id="signal-type">HOLD</h2>
+            <p class="signal-confidence">Confidence: <span id="signal-confidence">0%</span></p>
+            
+            <div class="signal-details">
+                <div class="detail-item">
+                    <span class="label">Current Price</span>
+                    <span class="value" id="signal-price">--</span>
+                </div>
+                <div class="detail-item">
+                    <span class="label">Risk Score</span>
+                    <span class="value" id="signal-risk">--</span>
+                </div>
+                <div class="detail-item">
+                    <span class="label">Signal Status</span>
+                    <span class="value" id="signal-status">Initializing...</span>
+                </div>
+            </div>
+
+            <div class="signal-reasoning" id="signal-reasoning"></div>
+            <div class="signal-recommendation" id="signal-recommendation"></div>
+        </div>
+
+        <div class="signal-guide">
+            <h3>Signal Guide</h3>
+            <div id="signal-guide-container">
+                <!-- Generated by JavaScript based on selected strategy -->
+            </div>
+        </div>
+    </div>
+
+    <div class="disclaimer">
+        <strong>&#9888; Disclaimer:</strong> These are algorithmic signals based on technical analysis. Not financial advice. 
+        Do your own research. Past performance ? future results. Trade at your own risk.
+    </div>
+
+    <div class="export-buttons">
+        <button onclick="exportAnomalies()" class="export-btn">&#8595; Download Anomalies CSV</button>
+        <button onclick="exportPriceData()" class="export-btn">&#8595; Download Price Data CSV</button>
+    </div>
+</section>
+
+<!-- TAB: PERFORMANCE METRICS -->
+<section id="tab-performance" class="tab-content hidden">
+    <div class="performance-header">
+        <h2>Model Performance & Analytics</h2>
+        <p class="subtitle">Real-time accuracy metrics and model contribution analysis (last 7 days)</p>
+    </div>
+
+    <div class="performance-cards">
+        <div class="perf-card">
+            <h4>Predictions</h4>
+            <div class="perf-value" id="perf-predictions">--</div>
+            <p class="perf-label">Total Anomaly Detections</p>
+        </div>
+        <div class="perf-card">
+            <h4>Isolation Forest</h4>
+            <div class="perf-value" id="perf-if-avg">--</div>
+            <p class="perf-label">Average Score</p>
+        </div>
+        <div class="perf-card">
+            <h4>Z-Score</h4>
+            <div class="perf-value" id="perf-z-avg">--</div>
+            <p class="perf-label">Average Score</p>
+        </div>
+        <div class="perf-card">
+            <h4>LSTM Neural Network</h4>
+            <div class="perf-value" id="perf-lstm-avg">--</div>
+            <p class="perf-label">Average Score</p>
+        </div>
+    </div>
+
+    <div class="performance-grid">
+        <div class="perf-section">
+            <h3>Risk Score Distribution</h3>
+            <table class="perf-table">
+                <thead>
+                    <tr>
+                        <th>Level</th>
+                        <th>Count</th>
+                        <th>Avg Score</th>
+                    </tr>
+                </thead>
+                <tbody id="perf-distribution-body">
+                    <tr><td colspan="3" style="text-align: center;">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="perf-section">
+            <h3>Ensemble Consensus</h3>
+            <div class="consensus-stat">
+                <span class="consensus-label">Model Agreement Rate</span>
+                <div class="consensus-bar">
+                    <div class="consensus-fill" id="consensus-fill" style="width: 0%;"></div>
+                </div>
+                <span class="consensus-value" id="consensus-value">0%</span>
+            </div>
+            <p class="perf-explanation">
+                Shows the percentage of detected anomalies where 2 or more models agreed on the risk classification.
+                Higher consensus = more reliable detections.
+            </p>
+        </div>
+    </div>
+
+        <!-- Signal Accuracy Backtest -->
+        <div class="backtest-section">
+            <h3>Signal Accuracy Backtest <span class="backtest-days-label">(last 30 days)</span></h3>
+            <p class="perf-explanation">How often each signal type led to a correct outcome 24 hours later.</p>
+            <div class="backtest-cards" id="backtest-cards">
+                <div class="backtest-card backtest-buy">
+                    <div class="bt-signal">BUY</div>
+                    <div class="bt-accuracy" id="bt-buy-pct">--</div>
+                    <div class="bt-label">Accuracy</div>
+                    <div class="bt-counts" id="bt-buy-counts">-- / --</div>
+                </div>
+                <div class="backtest-card backtest-sell">
+                    <div class="bt-signal">SELL</div>
+                    <div class="bt-accuracy" id="bt-sell-pct">--</div>
+                    <div class="bt-label">Accuracy</div>
+                    <div class="bt-counts" id="bt-sell-counts">-- / --</div>
+                </div>
+                <div class="backtest-card backtest-hold">
+                    <div class="bt-signal">HOLD</div>
+                    <div class="bt-accuracy" id="bt-hold-pct">--</div>
+                    <div class="bt-label">Accuracy</div>
+                    <div class="bt-counts" id="bt-hold-counts">-- / --</div>
+                </div>
+            </div>
+            <p id="backtest-msg" class="backtest-msg hidden"></p>
+        </div>
+    </section>
+
+<!-- TAB: LEARN -->
+<section id="tab-explanations" class="tab-content hidden">
+    <div class="explanation-tabs">
+        <button class="exp-tab-btn active" onclick="switchExplanation('overview', this)">Overview</button>
+        <button class="exp-tab-btn" onclick="switchExplanation('models', this)">Risk Engine Models</button>
+        <button class="exp-tab-btn" onclick="switchExplanation('risk', this)">Risk Levels</button>
+        <button class="exp-tab-btn" onclick="switchExplanation('signals', this)">Decision Layer</button>
+        <button class="exp-tab-btn" onclick="switchExplanation('glossary', this)">Glossary</button>
+        <button class="exp-tab-btn" onclick="switchExplanation('charts', this)">Reading Charts</button>
+        <button class="exp-tab-btn" onclick="switchExplanation('sentiment', this)">Market Sentiment</button>
+        <button class="exp-tab-btn" onclick="switchExplanation('faq', this)">FAQ</button>
+    </div>
+
+    <div id="exp-overview" class="exp-content active">
+        <h2>Learn The System</h2>
+        <p>This section explains how the platform works in simple language. Use the tabs above to explore each topic.</p>
+
+        <div class="learn-card-grid">
+            <div class="learn-card learn-card-blue">
+                <div class="learn-card-icon">&#9654;</div>
+                <h3>System Flow</h3>
+                <p>Live data flows through feature engineering, a 3-model ensemble scorer, risk classification, and signal generation. Every scored row is persisted and served via a standardised v1 API to downstream systems.</p>
+            </div>
+            <div class="learn-card learn-card-green">
+                <div class="learn-card-icon">&#9670;</div>
+                <h3>Risk Engine</h3>
+                <p>The system combines Isolation Forest, Z-Score, and LSTM outputs into one score from 0 to 100. Ensemble weights are dynamic and recalibrated after each retrain based on validation performance.</p>
+            </div>
+            <div class="learn-card learn-card-yellow">
+                <div class="learn-card-icon">&#9881;</div>
+                <h3>Decision Layer</h3>
+                <p>Strategy profiles map risk score to BUY, HOLD, or SELL zones with confidence context. Switch between Conservative, Balanced, Aggressive, and Asymmetric on the Decision tab.</p>
+            </div>
+            <div class="learn-card learn-card-red">
+                <div class="learn-card-icon">&#9651;</div>
+                <h3>Signal Integrity</h3>
+                <p>Real signals drive charts and alerts. Synthetic continuity signals are logged separately for observability only and are excluded from performance metrics and backtests.</p>
+            </div>
+            <div class="learn-card" style="background:linear-gradient(135deg,#1a2a4a 0%,#0d1f3c 100%);border-color:#3a6bc4">
+                <div class="learn-card-icon">&#128270;</div>
+                <h3>Explainability</h3>
+                <p>Every risk score includes per-model reasoning and the dynamic weights used. Available at <code>/api/v1/explain/BTC</code> for full transparency and downstream consumption.</p>
+            </div>
+        </div>
+
+        <div class="beginner-tip">
+            <strong>Suggested reading order:</strong>
+            Reading Charts -> Risk Levels -> Risk Engine Models -> Decision Layer -> Glossary -> FAQ
+        </div>
+    </div>
+
+    <!-- -- HOW MODELS WORK ----------------------------------- -->
+    <div id="exp-models" class="exp-content">
+        <h2>ML Ensemble Architecture</h2>
+        <p>The risk score is calculated from 3 independent machine learning models. Weights start at 25% / 25% / 50% and are <strong>dynamically recalibrated after each nightly retrain</strong> based on each model's validation-set performance.</p>
+        
+        <div class="model-explanation">
+            <div class="model-box">
+                <h3>Isolation Forest (default 25%)</h3>
+                <p><strong>What it does:</strong> Detects price and volume patterns that deviate significantly from normal clusters.</p>
+                <p><strong>How it works:</strong> Isolates outliers by randomly building decision trees. Anomalies require fewer splits to isolate, making them easy to identify.</p>
+                <p><strong>Good for:</strong> Detecting complex multivariate anomalies across OHLCV data.</p>
+                <p><strong>Weakness:</strong> May miss gradual trend changes or cyclical patterns.</p>
+            </div>
+
+            <div class="model-box">
+                <h3>Z-Score Statistic (default 25%)</h3>
+                <p><strong>What it does:</strong> Measures how many standard deviations the current price is from the historical training mean.</p>
+                <p><strong>How it works:</strong> Z = (price - mean) / std_dev. Higher deviation = higher anomaly score.</p>
+                <p><strong>Good for:</strong> Detecting sudden price shocks and extreme values quickly.</p>
+                <p><strong>Weakness:</strong> Assumes normal distribution; may overreact to outliers.</p>
+            </div>
+
+            <div class="model-box">
+                <h3>LSTM Neural Network (default 50%)</h3>
+                <p><strong>What it does:</strong> Predicts the next price based on a 60-candle sequence. Flags anomalies when actual price diverges from predicted.</p>
+                <p><strong>How it works:</strong> LSTM learns temporal patterns in historical data. Large prediction errors signal unusual market behavior.</p>
+                <p><strong>Good for:</strong> Capturing time-series patterns, trend breaks, and regime shifts.</p>
+                <p><strong>Weakness:</strong> Requires historical data; may lag during sudden market shocks.</p>
+            </div>
+        </div>
+
+        <div class="consensus-box">
+            <h3>Model Consensus</h3>
+            <p>When multiple models agree on an anomaly, confidence increases:</p>
+            <ul>
+                <li><strong>3/3 models agree:</strong> HIGH confidence</li>
+                <li><strong>2/3 models agree:</strong> MEDIUM confidence</li>
+                <li><strong>1/3 models agree:</strong> LOW confidence</li>
+            </ul>
+        </div>
+    </div>
+
+    <div id="exp-risk" class="exp-content">
+        <h2>Risk Levels Explained</h2>
+        <table class="risk-explanation-table">
+            <tr>
+                <th>Level</th>
+                <th>Score</th>
+                <th>Meaning</th>
+                <th>Market Condition</th>
+                <th>Recommendation</th>
+            </tr>
+            <tr class="risk-low-row">
+                <td><strong>LOW</strong></td>
+                <td>0-30</td>
+                <td>Market is calm and stable</td>
+                <td>Low volatility, predictable price action</td>
+                <td>Good entry point for positions</td>
+            </tr>
+            <tr class="risk-medium-row">
+                <td><strong>MEDIUM</strong></td>
+                <td>31-60</td>
+                <td>Mixed market signals</td>
+                <td>Moderate volatility, some anomalies</td>
+                <td>Exercise caution, wait for clarity</td>
+            </tr>
+            <tr class="risk-high-row">
+                <td><strong>HIGH</strong></td>
+                <td>61-80</td>
+                <td>Market is volatile with elevated risk</td>
+                <td>High volatility, frequent anomalies</td>
+                <td>Reduce exposure, tighten stops</td>
+            </tr>
+            <tr class="risk-critical-row">
+                <td><strong>CRITICAL</strong></td>
+                <td>81-100</td>
+                <td>Market is extremely unstable</td>
+                <td>Extreme volatility, severe anomalies</td>
+                <td>Consider exiting positions</td>
+            </tr>
+        </table>
+    </div>
+
+    <div id="exp-signals" class="exp-content">
+        <h2>Trading Signal Logic</h2>
+        <p>Automated buy/sell/hold recommendations based on risk scoring:</p>
+
+        <div class="beginner-tip">
+            <strong>Note:</strong> The exact risk score thresholds that trigger each signal depend on your chosen strategy. The values below are for the <strong>Conservative</strong> strategy (default). Switch between Conservative / Balanced / Aggressive / Asymmetric on the Trading Signal tab - the signal guide there always shows the thresholds for your active strategy.
+        </div>
+
+        <div class="signal-explanation-box">
+            <h3>BUY Signal (e.g. Risk = 20 on Conservative)</h3>
+            <p>The market is showing calm, stable conditions with low anomaly detection. This typically indicates:</p>
+            <ul>
+                <li>Limited price volatility</li>
+                <li>Predictable market structure</li>
+                <li>Low probability of sudden moves</li>
+                <li>Good risk/reward for position entry</li>
+            </ul>
+            <p><strong>Action:</strong> Consider opening or adding to long positions.</p>
+        </div>
+
+        <div class="signal-explanation-box">
+            <h3>HOLD Signal (risk sits between BUY and SELL thresholds)</h3>
+            <p>The market shows mixed signals with moderate anomalies. This typically indicates:</p>
+            <ul>
+                <li>Consolidation phase with direction unclear</li>
+                <li>Some volatility but not extreme</li>
+                <li>Need for more data/clarity</li>
+                <li>Potentially ranging market</li>
+            </ul>
+            <p><strong>Action:</strong> Maintain current positions; don't add new ones until signal clarifies.</p>
+        </div>
+
+        <div class="signal-explanation-box">
+            <h3>SELL Signal (e.g. Risk = 75 on Conservative)</h3>
+            <p>The market is showing volatile, unstable conditions with frequent anomalies. This typically indicates:</p>
+            <ul>
+                <li>High price volatility and unpredictability</li>
+                <li>Multiple model consensus on risk</li>
+                <li>Breakdown of normal patterns</li>
+                <li>Potential for sharp moves</li>
+            </ul>
+            <p><strong>Action:</strong> Consider reducing exposure or taking profits. Market risk is elevated.</p>
+        </div>
+
+        <p class="disclaimer">
+            <strong>&#9888; These are technical signals, not financial advice.</strong> 
+            Always conduct your own analysis. Backtesting shows these signals have a ~65-70% directional accuracy rate 
+            but past performance does not guarantee future results. Trade at your own risk.
+        </p>
+    </div>
+
+    <div id="exp-glossary" class="exp-content">
+        <h2>Glossary &amp; Key Terms</h2>
+        <p>Quick reference for all technical terms used throughout this dashboard.</p>
+        <div class="glossary-grid">
+            <div class="glossary-item">
+                <div class="glossary-term">OHLCV</div>
+                <div class="glossary-def">Open, High, Low, Close, Volume  -  the five values recorded for each price candle. Forms the basis of all chart data.</div>
+            </div>
+            <div class="glossary-item">
+                <div class="glossary-term">Risk Score (0-100)</div>
+                <div class="glossary-def">A composite score derived from three ML models. 0 = completely calm market, 100 = extreme instability. Drives all alerts and signals.</div>
+            </div>
+            <div class="glossary-item">
+                <div class="glossary-term">Anomaly</div>
+                <div class="glossary-def">A price data point that deviates significantly from expected behaviour, flagged by two or more models. Only High/Critical events (score = 61) are logged.</div>
+            </div>
+            <div class="glossary-item">
+                <div class="glossary-term">Isolation Forest</div>
+                <div class="glossary-def">An unsupervised ML algorithm that detects outliers by randomly partitioning data. Anomalies are isolated in fewer steps than normal points. Contributes a dynamic share of the ensemble score (default 25%).</div>
+            </div>
+            <div class="glossary-item">
+                <div class="glossary-term">Z-Score</div>
+                <div class="glossary-def">Measures how many standard deviations the current price is from the historical training mean. Formula: Z = (price - mean) ÷ std_dev. Contributes a dynamic share of the ensemble score (default 25%).</div>
+            </div>
+            <div class="glossary-item">
+                <div class="glossary-term">LSTM Neural Network</div>
+                <div class="glossary-def">Long Short-Term Memory  -  a recurrent neural network that learns sequential patterns. Predicts the next price from a 60-candle history window. Contributes a dynamic share of the ensemble score (default 50%).</div>
+            </div>
+            <div class="glossary-item">
+                <div class="glossary-term">Ensemble</div>
+                <div class="glossary-def">Combining multiple independent models to produce a more reliable output than any single model. This system uses IF + Z-Score + LSTM with weights that are dynamically recalibrated after each retrain (defaults: 25% / 25% / 50%).</div>
+            </div>
+            <div class="glossary-item">
+                <div class="glossary-term">Model Consensus</div>
+                <div class="glossary-def">When 2 or more models independently flag the same point as an anomaly. High consensus = higher confidence in the detection.</div>
+            </div>
+            <div class="glossary-item">
+                <div class="glossary-term">Bollinger Bands</div>
+                <div class="glossary-def">Price bands drawn �2 standard deviations from a 20-period moving average. Wide bands signal high volatility; narrow bands signal low volatility.</div>
+            </div>
+            <div class="glossary-item">
+                <div class="glossary-term">Moving Average (MA)</div>
+                <div class="glossary-def">The average closing price over the last 20 periods. Smooths out noise to reveal the underlying trend direction. A rising MA = uptrend.</div>
+            </div>
+            <div class="glossary-item">
+                <div class="glossary-term">Volatility</div>
+                <div class="glossary-def">Rolling standard deviation of BTC closing prices over a 24-hour window. High volatility means prices are swinging unpredictably  -  stored in the database with each row.</div>
+            </div>
+            <div class="glossary-item">
+                <div class="glossary-term">Contamination Rate</div>
+                <div class="glossary-def">A parameter for the Isolation Forest telling it what fraction of training data to treat as anomalous. Set to 5% (0.05)  -  a typical conservative value.</div>
+            </div>
+            <div class="glossary-item">
+                <div class="glossary-term">Trading Signal</div>
+                <div class="glossary-def">An automated BUY / HOLD / SELL recommendation generated from the current risk score and your selected strategy profile. Not financial advice.</div>
+            </div>
+            <div class="glossary-item">
+                <div class="glossary-term">Strategy Profile</div>
+                <div class="glossary-def">A risk-tolerance preset (Conservative, Balanced, Aggressive, Asymmetric) that sets the buy/sell threshold values for signal generation.</div>
+            </div>
+            <div class="glossary-item">
+                <div class="glossary-term">Candlestick</div>
+                <div class="glossary-def">A bar on the price chart representing one time period. Green/hollow = price went up; red/filled = price went down. The body shows open?close; the wicks show the high and low.</div>
+            </div>
+            <div class="glossary-item">
+                <div class="glossary-term">Support &amp; Resistance</div>
+                <div class="glossary-def">Price levels where the market historically reverses. Support = floor the price bounces from. Resistance = ceiling the price struggles to break through.</div>
+            </div>
+            <div class="glossary-item">
+                <div class="glossary-term">Market Cap</div>
+                <div class="glossary-def">Total value of all Bitcoin in circulation = price � circulating supply (~19.8 million BTC). Gives a sense of the overall size of the market.</div>
+            </div>
+            <div class="glossary-item">
+                <div class="glossary-term">Liquidity</div>
+                <div class="glossary-def">How easily you can buy or sell without moving the price. High liquidity (high volume) = you can trade large amounts without big price impact.</div>
+            </div>
+            <div class="glossary-item">
+                <div class="glossary-term">Bull / Bear Market</div>
+                <div class="glossary-def">Bull = sustained uptrend (prices rising). Bear = sustained downtrend (prices falling). Bitcoin has experienced multiple full cycles historically.</div>
+            </div>
+            <div class="glossary-item">
+                <div class="glossary-term">HODL</div>
+                <div class="glossary-def">Crypto slang for "Hold On for Dear Life"  -  the strategy of buying and holding long-term regardless of short-term price swings, rather than trying to trade in and out.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- -- READING CHARTS ------------------------------------ -->
+    <div id="exp-charts" class="exp-content">
+        <h2>How to Read the Price Chart</h2>
+        <p>The Chart tab shows BTC's price history using <strong>candlesticks</strong>  -  the standard tool used by traders worldwide. Here's everything you need to understand what you're looking at.</p>
+
+        <div class="charts-guide-section">
+            <h3>What Is a Candlestick?</h3>
+            <p>Each coloured bar on the chart represents one time period (1 hour, 1 day, etc.). It packs four data points into one shape:</p>
+            <div class="candle-explainer">
+                <div class="candle-diagram">
+                    <div class="candle-wick-top"></div>
+                    <div class="candle-body green-candle">
+                        <span class="candle-label-close">Close (top)</span>
+                        <span class="candle-label-open">Open (bottom)</span>
+                    </div>
+                    <div class="candle-wick-bottom"></div>
+                    <p class="candle-caption">&#9679; Green Candle  -  price went <strong>UP</strong></p>
+                </div>
+                <div class="candle-diagram">
+                    <div class="candle-wick-top"></div>
+                    <div class="candle-body red-candle">
+                        <span class="candle-label-close">Open (top)</span>
+                        <span class="candle-label-open">Close (bottom)</span>
+                    </div>
+                    <div class="candle-wick-bottom"></div>
+                    <p class="candle-caption">&#9679; Red Candle  -  price went <strong>DOWN</strong></p>
+                </div>
+                <div class="candle-labels-box">
+                    <p><strong>The four parts:</strong></p>
+                    <ul>
+                        <li><strong>Body</strong>  -  thick block, from open to close price</li>
+                        <li><strong>Upper wick (shadow)</strong>  -  thin line above body = highest price reached</li>
+                        <li><strong>Lower wick (shadow)</strong>  -  thin line below body = lowest price reached</li>
+                        <li><strong>Colour</strong>  -  &#9679; green = closed higher than opened; &#9679; red = closed lower</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="charts-guide-section">
+            <h3>Time Ranges (1H / 1D / 1W / 1M / All)</h3>
+            <p>The buttons at the top of the chart change what each candle represents:</p>
+            <table class="risk-explanation-table">
+                <tr><th>Button</th><th>Each candle =</th><th>Shows last</th><th>Best for</th></tr>
+                <tr><td><strong>1H</strong></td><td>1 hour</td><td>7 days</td><td>Short-term intraday moves</td></tr>
+                <tr><td><strong>1D</strong></td><td>1 day</td><td>90 days</td><td>Weekly/monthly trends</td></tr>
+                <tr><td><strong>1W</strong></td><td>1 week</td><td>1 year</td><td>Major macro trend cycles</td></tr>
+                <tr><td><strong>1M</strong></td><td>1 month</td><td>2 years</td><td>Big-picture bull/bear cycles</td></tr>
+                <tr><td><strong>All</strong></td><td>1 day</td><td>All data</td><td>Full history since seeding</td></tr>
+            </table>
+            <p style="margin-top:10px">&#9432; <strong>Tip:</strong> You can also <strong>scroll/pinch to zoom</strong> directly on the chart, and drag to pan. The modebar (top-right on hover) has zoom tools too.</p>
+        </div>
+
+        <div class="charts-guide-section">
+            <h3>Moving Average (MA 20)  -  Blue Line</h3>
+            <p>The <strong>Moving Average</strong> smooths out the price by taking the average of the last 20 candles. It removes noise so you can see the underlying trend more clearly.</p>
+            <ul>
+                <li><strong>Price above MA</strong> ? trend is upward (bullish)</li>
+                <li><strong>Price below MA</strong> ? trend is downward (bearish)</li>
+                <li><strong>Price crossing the MA</strong> ? possible trend reversal  -  watch closely</li>
+            </ul>
+        </div>
+
+        <div class="charts-guide-section">
+            <h3>Bollinger Bands  -  Yellow Dotted Lines</h3>
+            <p>Bollinger Bands add two bands around the MA: an <strong>upper band</strong> (MA + 2� standard deviation) and a <strong>lower band</strong> (MA - 2� standard deviation). About 95% of price action stays inside these bands under normal conditions.</p>
+            <ul>
+                <li><strong>Wide bands</strong> ? high volatility, the market is moving a lot</li>
+                <li><strong>Narrow bands (squeeze)</strong> ? very low volatility, a big move is often coming soon</li>
+                <li><strong>Price touches upper band</strong> ? potentially overbought</li>
+                <li><strong>Price touches lower band</strong> ? potentially oversold</li>
+            </ul>
+            <p>Toggle MA and Bollinger Bands on/off using the checkboxes in the chart controls.</p>
+        </div>
+
+        <div class="charts-guide-section">
+            <h3>Anomaly Markers  -  Circles on Chart</h3>
+            <p>Red and purple open circles overlaid on the chart mark the exact moment a High or Critical risk event was detected. Hover over a circle to see the risk level and score. When you see a cluster of circles, it means the models were repeatedly flagging unusual behaviour around that time period.</p>
+            <ul>
+                <li>&#9679; <strong>Red circle</strong>  -  High risk (score 61-80)</li>
+                <li>&#9675; <strong>Purple circle</strong>  -  Critical risk (score 81-100)</li>
+            </ul>
+        </div>
+
+        <div class="charts-guide-section">
+            <h3>Volume Bars  -  Chart Below the Price</h3>
+            <p>The smaller chart below the main price chart shows <strong>trading volume</strong>  -  how many USD worth of Bitcoin changed hands during that candle. Volume is one of the most important context clues:</p>
+            <ul>
+                <li><strong>Big price move + high volume</strong> ? move is significant and likely to continue</li>
+                <li><strong>Big price move + low volume</strong> ? move may be weak/false, could reverse</li>
+                <li><strong>Green bar</strong> ? buy pressure dominated that period</li>
+                <li><strong>Red bar</strong> ? sell pressure dominated that period</li>
+            </ul>
+        </div>
+
+        <div class="beginner-tip">
+            <strong>Tip:</strong> Switch to <strong>Line mode</strong> if candlesticks feel overwhelming. You will see a cleaner trend path.
+        </div>
+    </div>
+
+    <div id="exp-sentiment" class="exp-content hidden">
+        <h2>Market Sentiment (External Index)</h2>
+        <p>This section explains the external Fear and Greed index for learning only. Our in-house Risk Engine does not calculate this value directly and does not use it as a model feature.</p>
+
+        <div class="charts-guide-section">
+            <h3>How to interpret the external index</h3>
+            <table class="risk-explanation-table">
+                <tr><th>Range</th><th>Label</th><th>Typical interpretation</th></tr>
+                <tr><td>0-25</td><td>Extreme Fear</td><td>Panic and risk aversion dominate.</td></tr>
+                <tr><td>26-45</td><td>Fear</td><td>Caution remains high.</td></tr>
+                <tr><td>46-55</td><td>Neutral</td><td>Sentiment is balanced.</td></tr>
+                <tr><td>56-75</td><td>Greed</td><td>Optimism and FOMO increase.</td></tr>
+                <tr><td>76-100</td><td>Extreme Greed</td><td>Euphoria and overextension risk increase.</td></tr>
+            </table>
+        </div>
+
+        <div class="beginner-tip">
+            <strong>Important:</strong> This is reference context only. Trading decisions in this project are generated from the internal Risk Engine and strategy thresholds.
+        </div>
+    </div>
+
+    <!-- -- FAQ ----------------------------------------------- -->
+    <div id="exp-faq" class="exp-content">
+        <h2>? Frequently Asked Questions</h2>
+
+        <div class="faq-list">
+            <div class="faq-item">
+                <div class="faq-question">Why is the risk score always low / always the same?</div>
+                <div class="faq-answer">The risk score is driven by how unusual <em>today's</em> price looks compared to the last 60 candles the LSTM has learned from. During calm market periods, scores will naturally stay low. The score will spike when something genuinely unusual happens  -  a sudden crash, a sharp pump, or extreme volume. If you just started the app, it may take a few hours for the model to see enough new data to score confidently.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-question">Why does the Anomaly Rate in Model Stats show 0.0%?</div>
+                <div class="faq-answer">The anomaly rate shown in the Model Registry is the rate <em>at training time</em>  -  it tells you what fraction of the training data the Isolation Forest deemed anomalous during fitting. For Z-Score and LSTM, the value is always 0.0% because those models don't produce a training-time anomaly rate. This is expected and correct. The <strong>Performance tab</strong> shows the <em>current live</em> anomaly detection rate, which is more useful.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-question">What's the difference between High risk and Critical risk?</div>
+                <div class="faq-answer">Both signal unusual market behaviour, but <strong>Critical (81-100)</strong> means all three models are in strong agreement that something extreme is happening. High (61-80) means the ensemble is elevated but not at maximum alarm. Both trigger the anomaly banner and browser notifications, and both are logged in the Anomalies tab.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-question">Can I trust the BUY/SELL signals to trade with?</div>
+                <div class="faq-answer">No  -  these are <strong>algorithmic signals, not financial advice</strong>. They are based purely on statistical anomaly detection and risk scoring, not on market fundamentals, news, or expert analysis. They can be wrong. Always do your own research and never invest money you cannot afford to lose.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-question">Why does the 24h % change sometimes look different from what I see on Coinbase or Binance?</div>
+                <div class="faq-answer">The dashboard calculates the 24h change by comparing the current price to the price stored in the database exactly 24 hours ago. Other platforms may use their own specific exchange price or a different reference time. Small differences are normal. Large differences might appear during the first day of use while the database is building up history.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-question">What does "Using Cache" or "Binance" in the status indicator mean?</div>
+                <div class="faq-answer"><strong>Live</strong> = successfully fetched fresh data from CoinGecko right now. <strong>Using Cache</strong> = the last fetch was less than 60 seconds ago, so the same data is being shown (to avoid hammering the API). <strong>Binance</strong> = CoinGecko was unreachable and the system fell back to Binance as a backup. <strong>Offline</strong> = all live sources failed and the last price stored in the database is being shown.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-question">When do the models retrain?</div>
+                <div class="faq-answer">The models automatically retrain every night at midnight UTC using all available price data in the database. The Isolation Forest and LSTM are re-fitted from scratch so they stay up to date with recent market behaviour. You can see the last retrain time in the <strong>Model Stats</strong> tab.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-question">Why is volume only showing big numbers (billions)?</div>
+                <div class="faq-answer">Volume is denominated in <strong>USD</strong> (not BTC units). The 24h USD trading volume for Bitcoin is genuinely in the range of $20-$80 billion on a normal day. This is the standard way volume is reported by CoinGecko and on most professional trading platforms.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-question">How do I change how often the price updates?</div>
+                <div class="faq-answer">Use the <strong>Refresh Rate</strong> dropdown in the top centre of the header. Options range from 5 seconds to 1 minute. Note: the underlying API has a 60-second cache, so fetching more frequently than once a minute will return the same cached data  -  it won't hurt anything but also won't give you fresher prices.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-question">What is the Conservative vs Aggressive strategy?</div>
+                <div class="faq-answer">Each strategy sets different <em>thresholds</em> for when to trigger a BUY or SELL signal. <strong>Conservative</strong> only fires a BUY when the risk score is very low (= 20) and only SELLs at 75+, limiting signals to the very safest/most dangerous moments. <strong>Aggressive</strong> fires BUY at up to score 35 and SELL earlier, catching more opportunities but also more false signals. <strong>Asymmetric</strong> is extra cautious on the sell side  -  good for long-term holders who don't want to exit unless it's truly extreme.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-question">Why a single service instead of separate Flask and FastAPI servers?</div>
+                <div class="faq-answer">The app was refactored to a single FastAPI service that handles both the dashboard (Jinja2 templates) and all API endpoints. This simplifies deployment to Railway: one process, one port ($PORT), one Procfile line. FastAPI is capable of serving HTML templates directly, so there was no reason to run a second Flask process.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-question">What is the v1 API and why does it exist?</div>
+                <div class="faq-answer">The <code>/api/v1/</code> endpoints (<code>/risk/BTC</code>, <code>/features/BTC</code>, <code>/explain/BTC</code>) output stable Pydantic-validated schemas designed to be consumed by downstream systems in the Series 1 family (1B Regime, 1C Volatility, 1D Contagion, 1E Master Risk, etc.). They are versioned so breaking changes can be introduced in v2 without disrupting consumers.</div>
+            </div>
+        </div>
+    </div>
+
+</section>
+
+<script src="/static/js/app.js?v=4"></script>
+</body>
+</html>
