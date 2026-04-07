@@ -174,13 +174,13 @@ risk-engine-core/
 
 ## Documentation
 
-- `docs/ARCHITECTURE.md` — runtime topology and data flow
-- `docs/API_REFERENCE.md` — every endpoint with parameters
-- `docs/MODELS.md` — ensemble design, training, and inference
-- `docs/TRADING_SIGNALS.md` — strategy profiles and decision layer
-- `docs/CONFIGURATION.md` — all config.py settings explained
-- `docs/MODEL_SELECTION_RATIONALE.md` — why this model stack
-- `docs/LEARNING_PLAYBOOK.md` — demo walkthrough and interview prep
+- `docs/ARCHITECTURE.md` - runtime topology and data flow
+- `docs/API_REFERENCE.md` - every endpoint with parameters
+- `docs/MODELS.md` - ensemble design, training, and inference
+- `docs/TRADING_SIGNALS.md` - strategy profiles and decision layer
+- `docs/CONFIGURATION.md` - all config.py settings explained
+- `docs/MODEL_SELECTION_RATIONALE.md` - why this model stack
+- `docs/LEARNING_PLAYBOOK.md` - demo walkthrough and interview prep
 
 ---
 
