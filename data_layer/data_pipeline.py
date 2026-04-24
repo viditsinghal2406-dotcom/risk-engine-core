@@ -359,7 +359,7 @@ def _fetch_coingecko_historical(
             vol_df,
             on="timestamp",
             direction="nearest",
-            tolerance=pd.Timedelta("3H"),
+            tolerance=pd.Timedelta("3h"),
         )
     else:
         merged = price_df.copy()

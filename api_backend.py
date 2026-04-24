@@ -64,6 +64,12 @@ _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 _scheduler:      BackgroundScheduler | None = None
 _last_scored_ts: dict                       = {}   # last candle timestamp per coin
+_startup_started_at: datetime | None        = None
+_startup_done_event                          = threading.Event()
+
+# Render sets RENDER=true in runtime env. In cloud mode we keep startup lighter
+# to avoid hitting external API rate limits during boot.
+_IS_CLOUD_RUNTIME = str(os.getenv("RENDER", "")).lower() in {"1", "true", "yes"}
 
 
 def _retrain_job():
@@ -99,6 +105,9 @@ def _price_fetch_job():
 
 
 def _startup():
+    global _startup_started_at
+    _startup_started_at = datetime.utcnow()
+
     logger.info("=" * 60)
     logger.info("Crypto Risk Intelligence System starting up…")
     logger.info("=" * 60)
@@ -113,7 +122,7 @@ def _startup():
         else:
             logger.info(f"{coin}: seed present.")
 
-        if needs_deep_history(coin=coin, min_days=700):
+        if not _IS_CLOUD_RUNTIME and needs_deep_history(coin=coin, min_days=700):
             logger.info(f"{coin}: seeding 2yr daily data…")
             from data_layer.data_pipeline import _compute_and_attach_volatility
             from data_layer.database import insert_price_rows_bulk
@@ -122,12 +131,16 @@ def _startup():
                 rows = _compute_and_attach_volatility(rows)
                 insert_price_rows_bulk(rows)
                 logger.info(f"{coin}: 2yr seed done ({len(rows)} rows).")
+        elif _IS_CLOUD_RUNTIME:
+            logger.info(f"{coin}: skipping deep-history bootstrap on cloud runtime.")
         else:
             logger.info(f"{coin}: sufficient history present.")
 
-        if needs_hourly_seed(coin=coin):
+        if not _IS_CLOUD_RUNTIME and needs_hourly_seed(coin=coin):
             logger.info(f"{coin}: seeding 30d hourly candles…")
             seed_recent_hourly(days=30, coin=coin)
+        elif _IS_CLOUD_RUNTIME:
+            logger.info(f"{coin}: skipping hourly bootstrap on cloud runtime.")
         else:
             logger.info(f"{coin}: hourly data present.")
 
@@ -151,6 +164,7 @@ def _startup():
     atexit.register(lambda: _scheduler.shutdown(wait=False))
     logger.info(f"Scheduler running. Price fetch every {POLLING_INTERVAL_SECONDS}s.")
     logger.info("=" * 60)
+    _startup_done_event.set()
 
 
 # ----------------------------------------------------------------
@@ -260,8 +274,24 @@ def dashboard_head():
 
 @app.get("/api/status")
 def seeding_status():
+    coin_seeded = {c: (not needs_seeding(c)) for c in COIN_CONFIG}
+    startup_age_s = 0
+    if _startup_started_at is not None:
+        startup_age_s = int((datetime.utcnow() - _startup_started_at).total_seconds())
+
+    # UI should become usable as soon as BTC has baseline data, or once startup
+    # has clearly finished (or timed out) even if optional seeding could not run.
+    seeding_complete = (
+        coin_seeded.get("BTC", False)
+        or _startup_done_event.is_set()
+        or startup_age_s >= 180
+    )
+
     return {
-        "seeding_complete": all(not needs_seeding(c) for c in COIN_CONFIG),
+        "seeding_complete": seeding_complete,
+        "coin_seeded":      coin_seeded,
+        "startup_done":     _startup_done_event.is_set(),
+        "startup_age_s":    startup_age_s,
         "models_ready":     {c: models_ready(c) for c in COIN_CONFIG},
     }
 
