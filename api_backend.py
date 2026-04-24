@@ -14,9 +14,8 @@ import pandas as pd
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Query, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 from config import (
     DEFAULT_PAGE, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, CHART_RANGE_CONFIG,
@@ -57,12 +56,7 @@ from feature_engine.features import get_feature_snapshot
 setup_logging()
 logger = logging.getLogger(__name__)
 
-# ----------------------------------------------------------------
-# TEMPLATES (serve dashboard from this single service)
-# ----------------------------------------------------------------
-
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-templates = Jinja2Templates(directory=os.path.join(_BASE_DIR, "templates"))
 
 # ----------------------------------------------------------------
 # SCHEDULER JOBS
@@ -252,7 +246,12 @@ def _build_market_insight(risk: dict | None, recent_df: pd.DataFrame, anomaly_de
 
 @app.get("/")
 def dashboard(request: Request):
-    return templates.TemplateResponse(request, "index.html")
+    return FileResponse(os.path.join(_BASE_DIR, "templates", "index.html"))
+
+
+@app.head("/")
+def dashboard_head():
+    return Response(status_code=200)
 
 
 # ----------------------------------------------------------------
