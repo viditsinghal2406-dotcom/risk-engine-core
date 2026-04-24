@@ -1,0 +1,16 @@
+# Production dependencies for Render deploys
+# Uses CPU-only PyTorch to avoid heavy CUDA downloads on web service builds.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+FastAPI==0.135.1
+uvicorn==0.28.1
+requests==2.31.0
+httpx==0.28.1
+pandas==2.2.3
+numpy==1.26.4
+scikit-learn==1.5.0
+torch==2.2.1+cpu
+joblib==1.5.3
+APScheduler==3.11.2
+Jinja2==3.1.4
+pydantic==2.12.5
