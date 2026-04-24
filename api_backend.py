@@ -252,7 +252,7 @@ def _build_market_insight(risk: dict | None, recent_df: pd.DataFrame, anomaly_de
 
 @app.get("/")
 def dashboard(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
 
 
 # ----------------------------------------------------------------
