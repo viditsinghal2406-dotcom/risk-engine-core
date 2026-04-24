@@ -40,7 +40,7 @@ from data_layer.database import (
 from data_layer.data_pipeline import (
     fetch_latest_price, clear_price_cache,
     seed_database, needs_seeding, seed_recent_hourly, needs_hourly_seed,
-    backfill_missing_candles, needs_deep_history,
+    backfill_missing_candles, needs_deep_history, fetch_historical_candles,
 )
 from model_layer.anomaly_detector import (
     score_price_row, models_ready, get_risk_level, forecast_prices,
@@ -121,9 +121,9 @@ def _startup():
 
         if needs_deep_history(coin=coin, min_days=700):
             logger.info(f"{coin}: seeding 2yr daily data…")
-            from data_layer.data_pipeline import _fetch_binance_historical, _compute_and_attach_volatility
+            from data_layer.data_pipeline import _compute_and_attach_volatility
             from data_layer.database import insert_price_rows_bulk
-            rows = _fetch_binance_historical(interval="1d", days=730, coin=coin)
+            rows = fetch_historical_candles(interval="1d", days=730, coin=coin)
             if rows:
                 rows = _compute_and_attach_volatility(rows)
                 insert_price_rows_bulk(rows)

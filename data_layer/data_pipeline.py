@@ -3,7 +3,6 @@
 # data_pipeline.py -- Fetching, caching, seeding, storing price data
 # ============================================================
 
-import time
 import logging
 import requests
 import pandas as pd
@@ -302,6 +301,122 @@ def _fetch_binance_historical(interval: str = "1d", days: int = 365,
     return all_candles
 
 
+def _fetch_coingecko_historical(
+    interval: str = "1d",
+    days: int = 365,
+    start_dt: datetime = None,
+    coin: str = "BTC",
+) -> list[dict]:
+    """
+    Fetch historical series from CoinGecko using market_chart/range and
+    aggregate into OHLCV candles at the requested interval.
+    """
+    coin = coin.upper()
+    cfg = COIN_CONFIG.get(coin, COIN_CONFIG["BTC"])
+    coin_id = cfg["coin_id"]
+
+    origin = start_dt if start_dt else (datetime.utcnow() - timedelta(days=days))
+    end_dt = datetime.utcnow()
+
+    logger.info(
+        f"Starting CoinGecko historical fetch ({coin}, from {origin.strftime('%Y-%m-%d %H:%M')}, "
+        f"interval={interval})..."
+    )
+
+    try:
+        resp = retry_get(
+            f"{COINGECKO_URL}/coins/{coin_id}/market_chart/range",
+            params={
+                "vs_currency": "usd",
+                "from": int(origin.timestamp()),
+                "to": int(end_dt.timestamp()),
+            },
+            timeout=20,
+            label=f"CoinGecko historical {coin}",
+        )
+        payload = resp.json()
+    except Exception as exc:
+        logger.error(f"CoinGecko historical fetch failed for {coin}: {exc}")
+        return []
+
+    prices = payload.get("prices") or []
+    if not prices:
+        logger.warning(f"CoinGecko historical returned no price points for {coin}.")
+        return []
+
+    volumes = payload.get("total_volumes") or []
+
+    price_df = pd.DataFrame(prices, columns=["ts_ms", "close"])
+    price_df["timestamp"] = pd.to_datetime(price_df["ts_ms"], unit="ms", utc=True)
+    price_df = price_df[["timestamp", "close"]].sort_values("timestamp")
+
+    if volumes:
+        vol_df = pd.DataFrame(volumes, columns=["ts_ms", "volume"]) 
+        vol_df["timestamp"] = pd.to_datetime(vol_df["ts_ms"], unit="ms", utc=True)
+        vol_df = vol_df[["timestamp", "volume"]].sort_values("timestamp")
+        merged = pd.merge_asof(
+            price_df,
+            vol_df,
+            on="timestamp",
+            direction="nearest",
+            tolerance=pd.Timedelta("3H"),
+        )
+    else:
+        merged = price_df.copy()
+        merged["volume"] = 0.0
+
+    merged["volume"] = merged["volume"].fillna(0.0)
+    merged = merged.set_index("timestamp")
+
+    rule = "1H" if interval == "1h" else "1D"
+    ohlc = merged["close"].resample(rule).ohlc()
+    vol = merged["volume"].resample(rule).sum().rename("volume")
+
+    candles_df = pd.concat([ohlc, vol], axis=1).dropna(subset=["close"]).reset_index()
+    if candles_df.empty:
+        logger.warning(f"CoinGecko historical aggregation produced no candles for {coin}.")
+        return []
+
+    # Keep only candles from requested origin onward.
+    candles_df = candles_df[candles_df["timestamp"] >= pd.Timestamp(origin, tz="UTC")]
+
+    rows: list[dict] = []
+    for _, row in candles_df.iterrows():
+        ts = row["timestamp"].to_pydatetime().replace(tzinfo=None)
+        rows.append(
+            {
+                "timestamp": ts.strftime("%Y-%m-%dT%H:%M:%S"),
+                "open": float(row["open"]),
+                "high": float(row["high"]),
+                "low": float(row["low"]),
+                "close": float(row["close"]),
+                "volume": float(row["volume"]),
+                "volatility_24h": 0.0,
+                "source": "coingecko",
+                "coin": coin,
+            }
+        )
+
+    logger.info(f"Fetched {len(rows)} historical candles from CoinGecko ({coin}).")
+    return rows
+
+
+def fetch_historical_candles(
+    interval: str = "1d",
+    days: int = 365,
+    start_dt: datetime = None,
+    coin: str = "BTC",
+) -> list[dict]:
+    """Fetch historical candles, preferring Binance and falling back to CoinGecko."""
+    rows = _fetch_binance_historical(interval=interval, days=days, start_dt=start_dt, coin=coin)
+    if rows:
+        return rows
+
+    logger.warning(f"Binance historical unavailable for {coin}; falling back to CoinGecko.")
+    log_event("api_fallback", f"Historical fallback to CoinGecko for {coin} ({interval}).")
+    return _fetch_coingecko_historical(interval=interval, days=days, start_dt=start_dt, coin=coin)
+
+
 def _compute_and_attach_volatility(rows: list[dict]) -> list[dict]:
     df = pd.DataFrame(rows)
     df["timestamp"]      = pd.to_datetime(df["timestamp"])
@@ -316,9 +431,9 @@ def seed_database(coin: str = "BTC"):
     logger.info(f"Seeding database with historical {coin} data...")
     log_event("seed", f"Starting historical data seed for {coin}.")
 
-    rows = _fetch_binance_historical(interval="1d", days=365, coin=coin)
+    rows = fetch_historical_candles(interval="1d", days=365, coin=coin)
     if not rows:
-        logger.error("Seed failed -- no data returned from Binance.")
+        logger.error(f"Seed failed -- no historical data returned for {coin}.")
         log_event("error", "Historical seed returned no data.")
         return
 
@@ -360,9 +475,9 @@ def backfill_missing_candles(coin: str = "BTC"):
     log_event("backfill", f"Backfilling {coin} {gap_hours:.1f}h gap from {last_ts}.")
 
     # Fetch 1h candles starting from the last stored timestamp
-    rows = _fetch_binance_historical(interval="1h", start_dt=last_ts, coin=coin)
+    rows = fetch_historical_candles(interval="1h", start_dt=last_ts, coin=coin)
     if not rows:
-        logger.warning(f"Backfill: no candles returned from Binance for {coin}.")
+        logger.warning(f"Backfill: no candles returned for {coin}.")
         return
 
     # Drop the first candle — it's the same timestamp as last_ts already in DB
@@ -420,9 +535,9 @@ def seed_recent_hourly(days: int = 14, coin: str = "BTC"):
     log_event("seed", f"Starting {days}-day hourly data seed for {coin}.")
 
     coin = coin.upper()
-    rows = _fetch_binance_historical(interval="1h", days=days, coin=coin)
+    rows = fetch_historical_candles(interval="1h", days=days, coin=coin)
     if not rows:
-        logger.warning(f"Hourly seed returned no data from Binance for {coin}.")
+        logger.warning(f"Hourly seed returned no data for {coin}.")
         log_event("error", f"Hourly seed returned no data for {coin}.")
         return
 
