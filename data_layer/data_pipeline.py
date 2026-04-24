@@ -101,6 +101,7 @@ def _fetch_coingecko(coin: str = "BTC") -> Optional[dict]:
         ohlc_data   = ohlc_resp.json()
         latest_ohlc = ohlc_data[-1]
         spot_price  = price_data["usd"]
+        now_ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
 
         # Use Binance quoteVolume (USDT) so live ticks are consistent with
         # historical candles (seeded from Binance klines c[7] = USDT volume).
@@ -121,7 +122,10 @@ def _fetch_coingecko(coin: str = "BTC") -> Optional[dict]:
         vol_24h = quote_vol_24h if quote_vol_24h is not None else price_data["usd_24h_vol"]
 
         result = {
-            "timestamp":      datetime.utcfromtimestamp(latest_ohlc[0] / 1000).strftime("%Y-%m-%dT%H:%M:%S"),
+            # Use fetch-time timestamp so each live poll can be stored/scored.
+            # CoinGecko OHLC timestamp is candle-bucket time and can stay static
+            # for long periods, which causes INSERT OR IGNORE deduping.
+            "timestamp":      now_ts,
             "open":           latest_ohlc[1],
             "high":           max(latest_ohlc[2], spot_price),
             "low":            min(latest_ohlc[3], spot_price),
@@ -163,7 +167,8 @@ def _fetch_binance(coin: str = "BTC") -> Optional[dict]:
         quote_vol_24h = float(ticker["quoteVolume"])  # USDT volume, consistent with klines c[7]
 
         result = {
-            "timestamp":      datetime.utcfromtimestamp(candle[0] / 1000).strftime("%Y-%m-%dT%H:%M:%S"),
+            # Same rationale as CoinGecko path: preserve per-poll freshness.
+            "timestamp":      datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S"),
             "open":           float(candle[1]),
             "high":           float(candle[2]),
             "low":            float(candle[3]),
