@@ -144,7 +144,10 @@ def _startup():
         else:
             logger.info(f"{coin}: hourly data present.")
 
-        backfill_missing_candles(coin)
+        if _IS_CLOUD_RUNTIME:
+            logger.info(f"{coin}: skipping startup backfill on cloud runtime.")
+        else:
+            backfill_missing_candles(coin)
 
     for coin in COIN_CONFIG:
         if models_ready(coin):
