@@ -1,4 +1,4 @@
-# Risk Engine Core
+﻿# Risk Engine Core
 
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Backend-green)
@@ -29,13 +29,13 @@ It acts as the foundational layer for a larger market intelligence platform.
 
 ## Overview
 
-The system combines three approaches into a single unified risk score (0â€“100):
+The system combines three approaches into a single unified risk score (0-100):
 
-- **Isolation Forest** â€” unsupervised anomaly detection
-- **Z-Score** â€” statistical deviation from historical mean
-- **LSTM** â€” sequence-based prediction error
+- **Isolation Forest** - unsupervised anomaly detection
+- **Z-Score** - statistical deviation from historical mean
+- **LSTM** - sequence-based prediction error
 
-Scores map to: `Low â†’ Medium â†’ High â†’ Critical`
+Scores map to: `Low -> Medium -> High -> Critical`
 
 ---
 
@@ -55,18 +55,18 @@ Scores map to: `Low â†’ Medium â†’ High â†’ Critical`
 ## Architecture
 
 ```
-data_layer      â†’  data ingestion and storage
-feature_engine  â†’  feature creation and transformations
-model_layer     â†’  ML models and anomaly detection
-risk_engine     â†’  risk scoring and aggregation
-service_layer   â†’  signals and alerts
-api_backend     â†’  API endpoints and scheduler
+data_layer      -> data ingestion and storage
+feature_engine  -> feature creation and transformations
+model_layer     -> ML models and anomaly detection
+risk_engine     -> risk scoring and aggregation
+service_layer   -> trading signals and alerts
+api_backend     -> API endpoints and scheduler
 ```
 
 **Flow:**
 
 ```
-Market Data â†’ Features â†’ Models â†’ Risk Engine â†’ API â†’ Dashboard
+Market Data -> Features -> Models -> Risk Engine -> API -> Dashboard
 ```
 
 ---
@@ -154,37 +154,37 @@ Full reference: [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md)
 
 ```
 risk-engine-core/
-â”‚
-â”œâ”€â”€ data_layer/         data ingestion, caching, and database
-â”œâ”€â”€ feature_engine/     technical feature computation
-â”œâ”€â”€ model_layer/        ML training, scoring, and forecasting
-â”œâ”€â”€ risk_engine/        risk schema and response builders
-â”œâ”€â”€ service_layer/      trading signals and alert dispatch
-â”‚
-â”œâ”€â”€ templates/          dashboard HTML
-â”œâ”€â”€ static/             CSS and JavaScript
-â”œâ”€â”€ docs/               architecture, API reference, models, config
-â”œâ”€â”€ tests/              test suite
-â”œâ”€â”€ data/               seed data
-â”‚
-â”œâ”€â”€ api_backend.py      FastAPI routes and scheduler
-â”œâ”€â”€ config.py           all constants and environment bindings
-â”œâ”€â”€ main.py             thin uvicorn entrypoint
-â”œâ”€â”€ schema.sql          canonical database schema
-â””â”€â”€ requirements.txt
+|
+|-- data_layer/         data ingestion, caching, and database
+|-- feature_engine/     technical feature computation
+|-- model_layer/        ML training, scoring, and forecasting
+|-- risk_engine/        risk schema and response builders
+|-- service_layer/      trading signals and alert dispatch
+|
+|-- templates/          dashboard HTML
+|-- static/             CSS and JavaScript
+|-- docs/               architecture, API reference, models, config
+|-- tests/              test suite
+|-- data/               seed data
+|
+|-- api_backend.py      FastAPI routes and scheduler
+|-- config.py           all constants and environment bindings
+|-- main.py             thin uvicorn entrypoint
+|-- schema.sql          canonical database schema
+`-- requirements.txt
 ```
 
 ---
 
 ## Documentation
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) â€” runtime topology and data flow
-- [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md) â€” every endpoint with parameters
-- [`docs/MODELS.md`](docs/MODELS.md) â€” ensemble design, training, and inference
-- [`docs/TRADING_SIGNALS.md`](docs/TRADING_SIGNALS.md) â€” strategy profiles and decision layer
-- [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) â€” all config.py settings explained
-- [`docs/MODEL_SELECTION_RATIONALE.md`](docs/MODEL_SELECTION_RATIONALE.md) â€” why this model stack
-- [`docs/LEARNING_PLAYBOOK.md`](docs/LEARNING_PLAYBOOK.md) â€” demo walkthrough and interview prep
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - runtime topology and data flow
+- [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md) - every endpoint with parameters
+- [`docs/MODELS.md`](docs/MODELS.md) - ensemble design, training, and inference
+- [`docs/TRADING_SIGNALS.md`](docs/TRADING_SIGNALS.md) - strategy profiles and decision layer
+- [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) - all config.py settings explained
+- [`docs/MODEL_SELECTION_RATIONALE.md`](docs/MODEL_SELECTION_RATIONALE.md) - why this model stack
+- [`docs/LEARNING_PLAYBOOK.md`](docs/LEARNING_PLAYBOOK.md) - demo walkthrough and interview prep
 
 ---
 
@@ -205,7 +205,7 @@ This project is for analytics and education only. It is not financial advice.
 
 ---
 
-Built by **Vidit Singhal** — Series 1, System 1A.
+Built by **Vidit Singhal** - Series 1, System 1A.
 
-<!-- Made by Vidit Singhal — github.com/viditsinghal2406-dotcom -->
+<!-- Made by Vidit Singhal - github.com/viditsinghal2406-dotcom -->
 
